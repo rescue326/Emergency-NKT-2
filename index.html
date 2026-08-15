@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency NKT 2 - ระบบตรวจเช็คเวชภัณฑ์</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- XLSX & jsPDF CDN for Export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .tab-btn.active { border-bottom: 3px solid #ef4444; color: #ef4444; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 font-sans">
+
+    <!-- Header / Navbar -->
+    <nav class="bg-red-600 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <i class="fa-solid fa-truck-medical"></i> Emergency NKT 2
+            </h1>
+            <div id="userInfo" class="hidden items-center gap-3">
+                <span id="navUserName" class="text-sm bg-red-700 px-3 py-1 rounded-full"></span>
+                <button onclick="logout()" class="text-xs bg-white text-red-600 font-semibold px-3 py-1 rounded shadow hover:bg-slate-100">
+                    ออกจากระบบ
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <div class="max-w-7xl mx-auto p-4">
+
+        <!-- Auth Section: Login & Register -->
+        <div id="authSection" class="max-w-md mx-auto my-8 bg-white p-6 rounded-xl shadow-lg border">
+            <div class="flex border-b mb-6">
+                <button id="showLoginBtn" onclick="switchAuthTab('login')" class="w-1/2 py-2 text-center font-bold border-b-2 border-red-600 text-red-600">เข้าสู่ระบบ</button>
+                <button id="showRegBtn" onclick="switchAuthTab('reg')" class="w-1/2 py-2 text-center font-semibold text-slate-500">ลงทะเบียน</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium">อีเมล</label>
+                    <input type="email" id="loginEmail" required class="w-full border p-2 rounded mt-1 focus:ring-2 focus:ring-red-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">รหัสผ่าน</label>
+                    <input type="password" id="loginPassword" required class="w-full border p-2 rounded mt-1 focus:ring-2 focus:ring-red-500 outline-none">
+                </div>
+                <button type="submit" class="w-full bg-red-600 text-white py-2 rounded font-bold hover:bg-red-700">เข้าสู่ระบบ</button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="regForm" onsubmit="handleRegister(event)" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-sm font-medium">ชื่อ-นามสกุล (สำหรับแสดงผล)</label>
+                    <input type="text" id="regName" required class="w-full border p-2 rounded mt-1 focus:ring-2 focus:ring-red-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">ตำแหน่ง</label>
+                    <input type="text" id="regPos" placeholder="เช่น พยาบาลวิชาชีพ / พนักงานฉุกเฉิน" required class="w-full border p-2 rounded mt-1 focus:ring-2 focus:ring-red-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">อีเมล</label>
+                    <input type="email" id="regEmail" required class="w-full border p-2 rounded mt-1 focus:ring-2 focus:ring-red-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">รหัสผ่าน</label>
+                    <input type="password" id="regPassword" required class="w-full border p-2 rounded mt-1 focus:ring-2 focus:ring-red-500 outline-none">
+                </div>
+                <button type="submit" class="w-full bg-slate-800 text-white py-2 rounded font-bold hover:bg-slate-900">ลงทะเบียนเพื่อขออนุมัติ</button>
+            </form>
+        </div>
+
+        <!-- App Main Dashboard (Visible after auth) -->
+        <div id="appSection" class="hidden space-y-6">
+
+            <!-- App Navigation Tabs -->
+            <div class="flex border-b bg-white rounded-t-lg shadow-sm overflow-x-auto">
+                <button onclick="switchMainPage('check')" id="tabCheckBtn" class="px-6 py-3 font-bold text-red-600 border-b-2 border-red-600 whitespace-nowrap">
+                    <i class="fa-solid fa-clipboard-check"></i> ตรวจเช็คเวชภัณฑ์
+                </button>
+                <button onclick="switchMainPage('history')" id="tabHistBtn" class="px-6 py-3 text-slate-600 whitespace-nowrap">
+                    <i class="fa-solid fa-chart-line"></i> สถิติ & เก็บข้อมูล
+                </button>
+                <button id="adminTabBtn" onclick="switchMainPage('admin')" class="hidden px-6 py-3 text-slate-600 whitespace-nowrap text-amber-600 font-semibold">
+                    <i class="fa-solid fa-user-shield"></i> จัดการผู้ใช้ & ระบบ
+                </button>
+            </div>
+
+            <!-- PAGE 1: ตรวจเช็คเวชภัณฑ์ -->
+            <div id="checkPage" class="bg-white p-4 md:p-6 rounded-b-lg shadow space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-b pb-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">เลือกกระเป๋าอุปกรณ์</label>
+                        <select id="bagSelect" onchange="loadBagItems()" class="w-full border p-2 rounded bg-slate-50">
+                            <option value="1">กระเป๋า Ambulance (ด่วน)</option>
+                            <option value="2">กระเป๋า Refer nurse1</option>
+                            <option value="3">กระเป๋า New Born</option>
+                            <option value="4">กระเป๋า Dressing</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="w-1/2">
+                            <label class="block text-sm font-semibold mb-1">ประจำเดือน</label>
+                            <input type="text" id="checkMonth" class="w-full border p-2 rounded bg-slate-50">
+                        </div>
+                        <div class="w-1/2">
+                            <label class="block text-sm font-semibold mb-1">พ.ศ.</label>
+                            <input type="text" id="checkYear" class="w-full border p-2 rounded bg-slate-50">
+                        </div>
+                    </div>
+                    <div id="tagContainer">
+                        <label class="block text-sm font-semibold mb-1">รหัส TAG</label>
+                        <input type="text" id="checkTag" placeholder="ระบุรหัส TAG" class="w-full border p-2 rounded bg-slate-50">
+                    </div>
+                </div>
+
+                <!-- Sub-tabs สำหรับกระเป๋า Ambulance -->
+                <div id="ambulanceSubTabs" class="flex border-b text-sm font-medium">
+                    <button onclick="filterAmbCategory('A')" id="ambTabA" class="px-4 py-2 border-b-2 border-red-500 text-red-600 font-bold">หมวด A : Air way</button>
+                    <button onclick="filterAmbCategory('B')" id="ambTabB" class="px-4 py-2 text-slate-500">หมวด B : Breathing</button>
+                    <button onclick="filterAmbCategory('C')" id="ambTabC" class="px-4 py-2 text-slate-500">หมวด C : Circulation</button>
+                    <button onclick="filterAmbCategory('FLUID')" id="ambTabFLUID" class="px-4 py-2 text-slate-500">รายการสารน้ำ</button>
+                </div>
+
+                <!-- List Items Container -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[600px]">
+                        <thead>
+                            <tr class="bg-slate-100 border-b text-sm">
+                                <th class="p-3">รายการเวชภัณฑ์</th>
+                                <th class="p-3 w-44">สถานะการตรวจ</th>
+                                <th class="p-3 w-28">จำนวนที่มี</th>
+                                <th class="p-3">เหตุผล (กรณีไม่พร้อม/ไม่ครบ)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="itemsTableBody">
+                            <!-- แสดงรายการผ่าน JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pt-4 flex justify-end">
+                    <button onclick="saveInspectionBatch()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-lg shadow-lg flex items-center gap-2">
+                        <i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูลการเช็ค
+                    </button>
+                </div>
+            </div>
+
+            <!-- PAGE 2: สถิติ & เก็บข้อมูล (History & Export) -->
+            <div id="historyPage" class="hidden bg-white p-4 md:p-6 rounded-b-lg shadow space-y-4">
+                <div class="flex flex-wrap gap-4 items-center justify-between border-b pb-4">
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm font-semibold">กรองวันที่:</label>
+                        <input type="date" id="histDateFilter" onchange="loadHistoryData()" class="border p-2 rounded text-sm">
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded text-sm font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-file-excel"></i> ส่งออก Excel
+                        </button>
+                        <button onclick="exportToPDF()" class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded text-sm font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-file-pdf"></i> ส่งออก PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead>
+                            <tr class="bg-slate-100 border-b text-sm">
+                                <th class="p-3">วันที่/เวลา</th>
+                                <th class="p-3">กระเป๋า</th>
+                                <th class="p-3">เดือน/พ.ศ.</th>
+                                <th class="p-3">TAG</th>
+                                <th class="p-3">ผู้ตรวจเช็ค</th>
+                                <th class="p-3">สถานะรวม</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <!-- แสดงประวัติผ่าน JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- PAGE 3: ระบบแอดมิน (Admin Dashboard & Add Item) -->
+            <div id="adminPage" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-lg shadow space-y-4">
+                    <h3 class="text-lg font-bold border-b pb-2 text-slate-700">อนุมัติการสมัครสมาชิก</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 border-b text-sm">
+                                    <th class="p-3">ชื่อ-นามสกุล</th>
+                                    <th class="p-3">ตำแหน่ง</th>
+                                    <th class="p-3">สถานะ</th>
+                                    <th class="p-3">การจัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminUsersTable">
+                                <!-- แสดงรายการผู้สมัคร -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-lg shadow space-y-4">
+                    <h3 class="text-lg font-bold border-b pb-2 text-slate-700">เพิ่มอุปกรณ์เวชภัณฑ์ใหม่</h3>
+                    <form onsubmit="addNewItem(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">เลือกกระเป๋า</label>
+                            <select id="newItemBag" class="w-full border p-2 rounded">
+                                <option value="1">กระเป๋า Ambulance (ด่วน)</option>
+                                <option value="2">กระเป๋า Refer nurse1</option>
+                                <option value="3">กระเป๋า New Born</option>
+                                <option value="4">กระเป๋า Dressing</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">หมวด (เฉพาะ Ambulance)</label>
+                            <select id="newItemCat" class="w-full border p-2 rounded">
+                                <option value="">- ไม่มี -</option>
+                                <option value="A">A : Air way</option>
+                                <option value="B">B : Breathing</option>
+                                <option value="C">C : Circulation</option>
+                                <option value="FLUID">รายการสารน้ำ</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold mb-1">ชื่ออุปกรณ์</label>
+                            <input type="text" id="newItemName" required placeholder="ระบุชื่อเวชภัณฑ์" class="w-full border p-2 rounded">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded">
+                                + เพิ่มในระบบ
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Application Script Logic -->
+    <script>
+        // กำหนดค่า Supabase Credentials ของคุณ
+        const SUPABASE_URL = "https://hahnlfebwtqwcqvpfpta.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhaG5sZmVid3Rxd2N2cXBmcHRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3Mzk3MjAsImV4cCI6MjEwMjMxNTcyMH0.56iteb-lQAGbB5vIzmijst-zUAq9TxcOsXqPPCG9_48";
+        
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentUser = null;
+        let userProfile = null;
+        let currentLoadedItems = [];
+        let activeAmbCategory = 'A';
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            setCurrentDateFields();
+            checkSession();
+        });
+
+        function setCurrentDateFields() {
+            const now = new Date();
+            const months = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+            document.getElementById('checkMonth').value = months[now.getMonth()];
+            document.getElementById('checkYear').value = now.getFullYear() + 543;
+        }
+
+        function switchAuthTab(tab) {
+            if(tab === 'login') {
+                document.getElementById('loginForm').classList.remove('hidden');
+                document.getElementById('regForm').classList.add('hidden');
+                document.getElementById('showLoginBtn').className = "w-1/2 py-2 text-center font-bold border-b-2 border-red-600 text-red-600";
+                document.getElementById('showRegBtn').className = "w-1/2 py-2 text-center font-semibold text-slate-500";
+            } else {
+                document.getElementById('loginForm').classList.add('hidden');
+                document.getElementById('regForm').classList.remove('hidden');
+                document.getElementById('showRegBtn').className = "w-1/2 py-2 text-center font-bold border-b-2 border-red-600 text-red-600";
+                document.getElementById('showLoginBtn').className = "w-1/2 py-2 text-center font-semibold text-slate-500";
+            }
+        }
+
+        async function checkSession() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                await fetchProfile();
+            }
+        }
+
+        async function fetchProfile() {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', currentUser.id)
+                .single();
+
+            if (data) {
+                userProfile = data;
+                if (userProfile.status !== 'approved') {
+                    alert('บัญชีของคุณกำลังรอการอนุมัติจากแอดมิน');
+                    await supabase.auth.signOut();
+                    return;
+                }
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('appSection').classList.remove('hidden');
+                document.getElementById('userInfo').classList.remove('hidden');
+                document.getElementById('userInfo').classList.add('flex');
+                document.getElementById('navUserName').innerText = `${userProfile.full_name} (${userProfile.position})`;
+
+                if (userProfile.role === 'admin') {
+                    document.getElementById('adminTabBtn').classList.remove('hidden');
+                }
+                loadBagItems();
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const fullName = document.getElementById('regName').value;
+            const position = document.getElementById('regPos').value;
+
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: { full_name: fullName, position: position }
+                }
+            });
+
+            if (error) {
+                alert('เกิดข้อผิดพลาดในการลงทะเบียน: ' + error.message);
+            } else {
+                if(email === 'kt222rescue@gmail.com') {
+                    alert('ลงทะเบียนสำเร็จ! บัญชี Admin สูงสุดเข้าใช้งานได้ทันที');
+                } else {
+                    alert('ลงทะเบียนสำเร็จ! กรุณารอแอนมินทำการอนุมัติสิทธิ์เข้าใช้งาน');
+                }
+                switchAuthTab('login');
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) {
+                alert('เข้าสู่ระบบไม่สำเร็จ: ' + error.message);
+            } else {
+                currentUser = data.user;
+                await fetchProfile();
+            }
+        }
+
+        async function logout() {
+            await supabase.auth.signOut();
+            location.reload();
+        }
+
+        function switchMainPage(page) {
+            document.getElementById('checkPage').classList.add('hidden');
+            document.getElementById('historyPage').classList.add('hidden');
+            document.getElementById('adminPage').classList.add('hidden');
+
+            document.getElementById('tabCheckBtn').className = "px-6 py-3 text-slate-600 whitespace-nowrap";
+            document.getElementById('tabHistBtn').className = "px-6 py-3 text-slate-600 whitespace-nowrap";
+            document.getElementById('adminTabBtn').className = "px-6 py-3 text-slate-600 whitespace-nowrap text-amber-600 font-semibold";
+
+            if(page === 'check') {
+                document.getElementById('checkPage').classList.remove('hidden');
+                document.getElementById('tabCheckBtn').className = "px-6 py-3 font-bold text-red-600 border-b-2 border-red-600 whitespace-nowrap";
+            } else if(page === 'history') {
+                document.getElementById('historyPage').classList.remove('hidden');
+                document.getElementById('tabHistBtn').className = "px-6 py-3 font-bold text-red-600 border-b-2 border-red-600 whitespace-nowrap";
+                loadHistoryData();
+            } else if(page === 'admin') {
+                document.getElementById('adminPage').classList.remove('hidden');
+                document.getElementById('adminTabBtn').className = "px-6 py-3 font-bold text-amber-600 border-b-2 border-amber-600 whitespace-nowrap";
+                loadAdminUsers();
+            }
+        }
+
+        async function loadBagItems() {
+            const bagId = document.getElementById('bagSelect').value;
+            const ambSubTabs = document.getElementById('ambulanceSubTabs');
+            const tagContainer = document.getElementById('tagContainer');
+
+            if (bagId === '1') {
+                ambSubTabs.classList.remove('hidden');
+                tagContainer.classList.remove('hidden');
+            } else {
+                ambSubTabs.classList.add('hidden');
+                if (bagId === '4') {
+                    tagContainer.classList.remove('hidden');
+                } else {
+                    tagContainer.classList.add('hidden');
+                }
+            }
+
+            const { data, error } = await supabase
+                .from('bag_items')
+                .select('*')
+                .eq('bag_id', bagId);
+
+            if (data) {
+                currentLoadedItems = data;
+                renderItemsTable();
+            }
+        }
+
+        function filterAmbCategory(cat) {
+            activeAmbCategory = cat;
+            ['A', 'B', 'C', 'FLUID'].forEach(c => {
+                const btn = document.getElementById(`ambTab${c}`);
+                if (c === cat) {
+                    btn.className = "px-4 py-2 border-b-2 border-red-500 text-red-600 font-bold";
+                } else {
+                    btn.className = "px-4 py-2 text-slate-500";
+                }
+            });
+            renderItemsTable();
+        }
+
+        function renderItemsTable() {
+            const bagId = document.getElementById('bagSelect').value;
+            const tbody = document.getElementById('itemsTableBody');
+            tbody.innerHTML = '';
+
+            let filtered = currentLoadedItems;
+            if (bagId === '1') {
+                filtered = currentLoadedItems.filter(i => i.category === activeAmbCategory);
+            }
+
+            filtered.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b hover:bg-slate-50";
+                tr.innerHTML = `
+                    <td class="p-3 font-medium text-slate-700">${item.item_name}</td>
+                    <td class="p-3">
+                        <select id="status_${item.id}" class="w-full border p-1 rounded text-sm bg-white focus:ring-1 focus:ring-red-500">
+                            <option value="ไม่พร้อมใช้งาน" selected class="text-red-600">ไม่พร้อมใช้งาน</option>
+                            <option value="พร้อมใช้งาน" class="text-emerald-600">พร้อมใช้งาน</option>
+                        </select>
+                    </td>
+                    <td class="p-3">
+                        <input type="number" id="qty_${item.id}" value="0" min="0" class="w-full border p-1 rounded text-sm text-center">
+                    </td>
+                    <td class="p-3">
+                        <input type="text" id="remark_${item.id}" placeholder="ระบุเหตุผล" class="w-full border p-1 rounded text-sm">
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function saveInspectionBatch() {
+            const bagId = document.getElementById('bagSelect').value;
+            const month = document.getElementById('checkMonth').value;
+            const year = document.getElementById('checkYear').value;
+            const tag = document.getElementById('checkTag').value;
+
+            let hasIncomplete = false;
+
+            const { data: header, error: headErr } = await supabase
+                .from('inspections')
+                .insert([{
+                    bag_id: bagId,
+                    month_check: month,
+                    year_check: year,
+                    tag_code: tag,
+                    inspector_id: userProfile.id,
+                    inspector_name: userProfile.full_name,
+                    inspector_position: userProfile.position
+                }])
+                .select()
+                .single();
+
+            if (headErr) {
+                alert('เกิดข้อผิดพลาดในการบันทึก: ' + headErr.message);
+                return;
+            }
+
+            const detailsBatch = currentLoadedItems.map(item => {
+                const statusEl = document.getElementById(`status_${item.id}`);
+                const qtyEl = document.getElementById(`qty_${item.id}`);
+                const remarkEl = document.getElementById(`remark_${item.id}`);
+
+                const status = statusEl ? statusEl.value : 'ไม่พร้อมใช้งาน';
+                const qty = qtyEl ? parseInt(qtyEl.value) || 0 : 0;
+                const remark = remarkEl ? remarkEl.value : '';
+
+                if (status === 'ไม่พร้อมใช้งาน' || qty === 0) {
+                    hasIncomplete = true;
+                }
+
+                return {
+                    inspection_id: header.id,
+                    item_name: item.item_name,
+                    category: item.category,
+                    status: status,
+                    quantity: qty,
+                    remark: remark
+                };
+            });
+
+            const { error: detErr } = await supabase
+                .from('inspection_details')
+                .insert(detailsBatch);
+
+            if (detErr) {
+                alert('เกิดข้อผิดพลาดในการบันทึกรายละเอียด: ' + detErr.message);
+            } else {
+                await supabase.from('inspections').update({ has_incomplete: hasIncomplete }).eq('id', header.id);
+                alert('บันทึกข้อมูลสำเร็จเรียบร้อยแล้ว!');
+                renderItemsTable();
+            }
+        }
+
+        async function loadHistoryData() {
+            const dateFilter = document.getElementById('histDateFilter').value;
+            let query = supabase.from('inspections').select('*, bags(name)').order('created_at', { ascending: false });
+
+            if (dateFilter) {
+                query = query.gte('created_at', `${dateFilter}T00:00:00`).lte('created_at', `${dateFilter}T23:59:59`);
+            }
+
+            const { data, error } = await query;
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '';
+
+            if (data) {
+                data.forEach(row => {
+                    const dt = new Date(row.created_at).toLocaleString('th-TH');
+                    const tr = document.createElement('tr');
+                    tr.className = "border-b hover:bg-slate-50 text-sm";
+                    tr.innerHTML = `
+                        <td class="p-3">${dt}</td>
+                        <td class="p-3 font-semibold">${row.bags ? row.bags.name : ''}</td>
+                        <td class="p-3">${row.month_check} ${row.year_check}</td>
+                        <td class="p-3">${row.tag_code || '-'}</td>
+                        <td class="p-3">${row.inspector_name}</td>
+                        <td class="p-3">
+                            ${row.has_incomplete ? 
+                                `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold">ไม่ครบถ้วน</span>` : 
+                                `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs font-bold">สมบูรณ์</span>`}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        async function exportToExcel() {
+            const { data } = await supabase.from('inspections').select('*, bags(name)');
+            if (!data || data.length === 0) return alert('ไม่มีข้อมูลสำหรับส่งออก');
+            
+            const ws = XLSX.utils.json_to_sheet(data.map(d => ({
+                'วันที่-เวลา': new Date(d.created_at).toLocaleString('th-TH'),
+                'กระเป๋า': d.bags ? d.bags.name : '',
+                'ประจำเดือน': d.month_check,
+                'พ.ศ.': d.year_check,
+                'รหัส TAG': d.tag_code,
+                'ผู้ตรวจเช็ค': d.inspector_name,
+                'ตำแหน่ง': d.inspector_position,
+                'สถานะ': d.has_incomplete ? 'ไม่ครบถ้วน' : 'สมบูรณ์'
+            })));
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Inspection_History");
+            XLSX.writeFile(wb, `Emergency_NKT2_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+
+        async function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text("Emergency NKT 2 - Inspection Report", 14, 15);
+            
+            const { data } = await supabase.from('inspections').select('*, bags(name)');
+            const tableData = data.map(d => [
+                new Date(d.created_at).toLocaleDateString('th-TH'),
+                d.bags ? d.bags.name : '',
+                `${d.month_check} ${d.year_check}`,
+                d.tag_code || '-',
+                d.inspector_name,
+                d.has_incomplete ? 'ไม่ครบถ้วน' : 'สมบูรณ์'
+            ]);
+
+            doc.autoTable({
+                head: [['Date', 'Bag', 'Month/Year', 'TAG', 'Inspector', 'Status']],
+                body: tableData,
+                startY: 20
+            });
+
+            doc.save(`Emergency_NKT2_Report_${new Date().toISOString().slice(0,10)}.pdf`);
+        }
+
+        async function loadAdminUsers() {
+            const { data } = await supabase.from('profiles').select('*');
+            const tbody = document.getElementById('adminUsersTable');
+            tbody.innerHTML = '';
+
+            if (data) {
+                data.forEach(user => {
+                    const tr = document.createElement('tr');
+                    tr.className = "border-b text-sm";
+                    tr.innerHTML = `
+                        <td class="p-3 font-semibold">${user.full_name}</td>
+                        <td class="p-3">${user.position}</td>
+                        <td class="p-3">
+                            <span class="${user.status === 'approved' ? 'text-emerald-600' : 'text-amber-600'} font-bold">
+                                ${user.status}
+                            </span>
+                        </td>
+                        <td class="p-3">
+                            ${user.status !== 'approved' ? 
+                                `<button onclick="approveUser('${user.id}')" class="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold">อนุมัติ</button>` : 
+                                `<span class="text-slate-400 text-xs">อนุมัติแล้ว</span>`}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        async function approveUser(userId) {
+            const { error } = await supabase.from('profiles').update({ status: 'approved' }).eq('id', userId);
+            if (!error) {
+                alert('อนุมัติผู้ใช้งานสำเร็จ!');
+                loadAdminUsers();
+            }
+        }
+
+        async function addNewItem(e) {
+            e.preventDefault();
+            const bagId = document.getElementById('newItemBag').value;
+            const cat = document.getElementById('newItemCat').value;
+            const name = document.getElementById('newItemName').value;
+
+            const { error } = await supabase.from('bag_items').insert([{
+                bag_id: bagId,
+                category: cat,
+                item_name: name
+            }]);
+
+            if (!error) {
+                alert('เพิ่มอุปกรณ์เข้าสู่ระบบเรียบร้อย!');
+                document.getElementById('newItemName').value = '';
+                loadBagItems();
+            } else {
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
